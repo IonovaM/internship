@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -18,6 +19,7 @@ public class UserService{
     public void saveUser(User user) {
         userRepository.save(user);
     }
+
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
@@ -30,7 +32,7 @@ public class UserService{
         return userRepository.existsByEmail(email);
     }
 
-    public User findById(int userId) {
+    public Optional<User> findById(UUID userId) {
         return userRepository.findById(userId);
     }
 }

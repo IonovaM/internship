@@ -4,6 +4,7 @@ import app.authserver.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, Integer> {
 
@@ -13,5 +14,5 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     Boolean existsByEmail(String email);
 
-    User findById(int userId);
+    Optional<User> findById(UUID userId);
 }

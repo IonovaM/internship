@@ -1,0 +1,38 @@
+server:
+  port: 4002
+
+spring:
+  mail:
+    host: smtp.mail.lelmon.tech
+    port: 587
+#    port: 465
+    username: 'auth@mail.lelmon.tech'
+    password: 'P@ssw0rd123'
+#    host: smtp.gmail.com
+#    port: 587
+#    username: '9b.ionova.margarita@gmail.com'
+#    password: 'sych pyyc xjsm bluw'
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls.enable: true
+  datasource:
+    url:
+    driver-class-name:
+    hikari:
+      allow-bean-definition-overriding: true
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: profile-group
+      auto-offset-reset: latest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: '*'
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer

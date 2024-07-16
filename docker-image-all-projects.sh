@@ -10,7 +10,8 @@ build_project() {
 
 projects=(
     "auth-server"
-    "eureka-server"
+    "notification"
+    "profile"
 )
 
 # Loop through projects and build each one
@@ -21,3 +22,5 @@ done
 
 
 docker build -t auth-server ./auth-server
+docker build -t notification ./notification
+docker build -t profile ./profile

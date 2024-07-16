@@ -1,11 +1,11 @@
 package app.authserver.service;
 
-import app.authserver.model.RefreshToken;
-import app.authserver.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.TimeUnit;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,31 +16,48 @@ public class RefreshTokenService {
 
     @Value("${jwt.refrEshexpireMs}")
     private Long refreshTokenDurationMs;
-
-    private final RefreshTokenRepository refreshTokenRepository;
     private final UserService userService;
+    private final RedisTemplate<String, Object> redisTemplate;
 
+    public String createRefreshToken(UUID userId) {
+        String token = UUID.randomUUID().toString();
+        long expiration = Instant.now().plusMillis(refreshTokenDurationMs).toEpochMilli();
 
-    public Optional<RefreshToken> findByToken(String token) {
-        return refreshTokenRepository.findByToken(token);
+        RefreshTokenData refreshTokenData = new RefreshTokenData(userId, expiration);
+
+        redisTemplate.opsForValue().set("refreshToken:" + token, refreshTokenData, refreshTokenDurationMs, TimeUnit.MILLISECONDS);
+        return token;
     }
 
-    public RefreshToken createRefreshToken(int userId) {
-
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUser(userService.findById(userId));
-        refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
-        refreshToken.setToken(UUID.randomUUID().toString());
-
-        return refreshTokenRepository.save(refreshToken);
+    public boolean verifyExpiration(String token) {
+        RefreshTokenData refreshTokenData = (RefreshTokenData) redisTemplate.opsForValue().get("refreshToken:" + token);
+        if (refreshTokenData == null || refreshTokenData.getExpiryDate() < Instant.now().toEpochMilli()) {
+            redisTemplate.delete("refreshToken:" + token);
+            return false;
+        }
+        return true;
     }
 
-    public RefreshToken verifyExpiration(RefreshToken token) {
+    public RefreshTokenData getUserIdFromToken(String token) {
+        RefreshTokenData refreshTokenData = (RefreshTokenData) redisTemplate.opsForValue().get("refreshToken:" + token);
+        return refreshTokenData;
+    }
 
-        if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
-            refreshTokenRepository.delete(token);
+    private static class RefreshTokenData {
+        private UUID userId;
+        private long expiryDate;
+
+        public RefreshTokenData(UUID userId, long expiryDate) {
+            this.userId = userId;
+            this.expiryDate = expiryDate;
         }
 
-        return token;
+        public UUID getUserId() {
+            return userId;
+        }
+
+        public long getExpiryDate() {
+            return expiryDate;
+        }
     }
 }

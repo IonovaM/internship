@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public class CustomUserDetails implements UserDetails {
 
@@ -62,7 +63,7 @@ public class CustomUserDetails implements UserDetails {
         return true;
     }
 
-    public int getId(){
+    public UUID getId(){
         return user.getId();
     }
 

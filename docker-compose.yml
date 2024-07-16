@@ -12,11 +12,49 @@ services:
       - POSTGRES_USER=${POSTGRES_USERNAME}
     volumes:
       - db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+
+  redis:
+    image: redis
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+
+  authserver:
+    image: 'auth-server'
+    container_name: authserver
+    ports:
+      - '${AUTH_PORT}:${AUTH_PORT}'
+    environment:
+      - spring.datasource.url=jdbc:postgresql://postgres:5432/${POSTGRES_DATABASE}
+      - spring.datasource.username=${POSTGRES_USERNAME}
+      - spring.datasource.password=${POSTGRES_PASSWORD}
+      - spring.redis.host=redis
+      - spring.redis.port=${REDIS_PORT}
+    depends_on:
+      - postgres
+      - redis
+
+  notification:
+    image: 'notification'
+    container_name: notification
+    ports:
+      - '${NOTIFICATION_PORT}:${NOTIFICATION_PORT}'
+
+  profile:
+    image: 'profile'
+    container_name: profile
+    ports:
+      - '${PROFILE_PORT}:${PROFILE_PORT}'
+    environment:
+      - spring.datasource.url=jdbc:postgresql://postgres:5432/${POSTGRES_DATABASE}
+      - spring.datasource.username=${POSTGRES_USERNAME}
+      - spring.datasource.password=${POSTGRES_PASSWORD}
+      - spring.redis.host=redis
+      - spring.redis.port=${REDIS_PORT}
+    depends_on:
+      - postgres
+      - redis
 
   kafka:
     image: 'bitnami/kafka:latest'
@@ -32,51 +70,16 @@ services:
       - KAFKA_CONTROLLER_USER=${KAFKA_CONTROLLER_USER}
       - KAFKA_CONTROLLER_PASSWORD=${KAFKA_CONTROLLER_PASSWORD}
 
-  redis:
-    image: redis
+  kafka-ui:
+    image: "provectuslabs/kafka-ui"
     ports:
-      - "${REDIS_PORT}:6379"
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  authserver:
-    image: 'auth-server'
-    container_name: authserver
-    ports:
-      - '${AUTH_PORT}:${AUTH_PORT}'
+      - "9090:8080"
+    restart: always
     environment:
-      - spring.datasource.url=jdbc:postgresql://postgres:5432/${POSTGRES_DATABASE}
-      - spring.datasource.username=${POSTGRES_USERNAME}
-      - spring.datasource.password=${POSTGRES_PASSWORD}
-      - spring.redis.host=redis
-      - spring.redis.port=${REDIS_PORT}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-#  kafka-ui:
-#    image: "provectuslabs/kafka-ui"
-#    ports:
-#      - "9090:8080"
-#    restart: always
-#    environment:
-#      - KAFKA_CLUSTERS_0_NAME=local
-#      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9093
-#      - KAFKA_CLUSTERS_0_ZOOKEEPER=localhost:2181
-#
-#  zookeeper:
-#    image: "bitnami/zookeeper:latest"
-#    ports:
-#      - "2181:2181"
-#    volumes:
-#      - "zookeeper_data:/bitnami"
-#    environment:
-#      - ALLOW_ANONYMOUS_LOGIN=yes
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=localhost:2181
 
 volumes:
   db-data:
+  redis_data:

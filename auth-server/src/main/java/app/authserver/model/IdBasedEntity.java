@@ -7,6 +7,8 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.MappedSuperclass;
+import javax.persistence.Column;
+import java.util.UUID;
 
 @MappedSuperclass
 @Getter
@@ -14,6 +16,9 @@ import javax.persistence.MappedSuperclass;
 public class IdBasedEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    protected Integer id;
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(unique = true, nullable = false, columnDefinition = "uuid")
+    protected UUID id;
+
+    public void setId(UUID id) { this.id = id;}
 }

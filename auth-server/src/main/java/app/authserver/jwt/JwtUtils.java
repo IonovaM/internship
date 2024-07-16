@@ -2,6 +2,7 @@ package app.authserver.jwt;
 
 import app.authserver.security.CustomUserDetails;
 import app.authserver.security.CustomUserDetailsService;
+import app.authserver.config.RedisConfig;
 import io.jsonwebtoken.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,9 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
+import org.springframework.data.redis.core.RedisTemplate;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 @Component
 public class JwtUtils {
@@ -27,18 +31,21 @@ public class JwtUtils {
     @Autowired
     private CustomUserDetailsService customUserDetailsService;
 
-    public String generateJwtToken(String username) {
-        return generateTokenFromUsername(username);
-    }
+    private final RedisTemplate<String, Object> redisTemplate;
 
-    public String generateTokenFromUsername(String username) {
-        UserDetails userDetails= customUserDetailsService.loadUserByUsername(username);
-        StringBuilder roles=new StringBuilder();
-        userDetails.getAuthorities().forEach(role->{
-            roles.append(role.getAuthority()+" ");
-        });
+    @Autowired
+    public JwtUtils(RedisTemplate<String, Object> redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+    public String generateJwtToken(UUID userId) { return generateTokenFromUserId(userId);}
+
+    public String generateTokenFromUserId(UUID userId) {
+        UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+        StringBuilder roles = new StringBuilder();
+        userDetails.getAuthorities().forEach(role -> roles.append(role.getAuthority()).append(" "));
+
         return Jwts.builder()
-                .setSubject(username)
+                .setSubject(userId.toString())
                 .setIssuer(roles.toString())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
@@ -46,12 +53,20 @@ public class JwtUtils {
                 .compact();
     }
 
-    public String getUserNameFromJwtToken(String token) {
-        return Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().getSubject();
+    public UUID getUserIdFromJwtToken(String token) {
+        String userIdString = Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().getSubject();
+        return UUID.fromString(userIdString);
     }
 
     public boolean validateJwtToken(String authToken) {
         try {
+            UUID userId = getUserIdFromJwtToken(authToken);
+            String storedToken = getToken(userId.toString());
+            System.out.println("Stored token for userId " + userId + ": " + storedToken);
+            if (storedToken == null || !storedToken.equals(authToken)) {
+                LOGGER.error("JwtUtils | validateJwtToken | Token not found in Redis or does not match");
+                return false;
+            }
             Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(authToken);
             return true;
         } catch (SignatureException e) {
@@ -67,5 +82,18 @@ public class JwtUtils {
         }
 
         return false;
+    }
+
+    public void saveToken(UUID userId, String token) {
+        redisTemplate.opsForValue().set(userId.toString(), token, jwtExpirationMs, TimeUnit.MILLISECONDS);
+    }
+
+    public String getToken(String userId) {
+        Object token = redisTemplate.opsForValue().get(userId);
+        return token != null ? token.toString() : null;
+    }
+
+    public void deleteToken(UUID userId) {
+        redisTemplate.delete(userId.toString());
     }
 }

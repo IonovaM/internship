@@ -2,10 +2,6 @@ server:
   port: 4001
 
 spring:
-  #  session:
-  #    store-type: redis
-  #  liquibase:
-  #    change-log: classpath:/db/changelog/db.changelog-master.yaml
   datasource:
     url: jdbc:postgresql://postgres:5432/app
     username: app
@@ -27,5 +23,5 @@ spring:
 
 jwt:
   secret: mYiADZOy9Hq5pTfomhj9hPUJLGAN/ZB6AZ4yoHfCtN0f8DaNQr6+4qeaJ9YfMK4ZbX85J3ao6TotW+jrLKLGeafpaYYLn2mmrYOB/1mJzhQYEaf883PtWAIwnTwHpPuEsJAhyHwEtlTvy++pZA+0bns66RUDBk80bJUA4JhJUI8
-  expireMs: 1200000
-  refrEshexpireMs: 1200000
+  expireMs: 259200000
+  refrEshexpireMs: 1209600000

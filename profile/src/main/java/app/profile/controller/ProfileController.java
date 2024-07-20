@@ -1,40 +1,8 @@
-//package app.profile.controller;
-//
-//import app.profile.payload.request.UpdateProfileRequest;
-//import app.profile.service.ProfileService;
-//import org.springframework.beans.factory.annotation.Autowired;
-//import org.springframework.http.ResponseEntity;
-//import org.springframework.security.core.Authentication;
-//import org.springframework.security.core.context.SecurityContextHolder;
-//import org.springframework.web.bind.annotation.*;
-//
-//import javax.validation.Valid;
-//import java.util.UUID;
-//
-//@RestController
-//@RequestMapping("/api/profile")
-//public class ProfileController {
-//
-//    @Autowired
-//    private ProfileService profileService;
-//
-//    @PutMapping("/update")
-//    public ResponseEntity<String> updateProfile(@Valid @RequestBody UpdateProfileRequest updateRequest) {
-//        try {
-//            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-//            String currentPrincipalName = authentication.getName();
-//            UUID userId = profileService.getUserIdFromJwtToken(currentPrincipalName);
-//            profileService.updateProfile(userId, updateRequest);
-//
-//            return ResponseEntity.ok("Profile updated successfully!");
-//        } catch (Exception e) {
-//            return ResponseEntity.badRequest().body("Failed to update profile: " + e.getMessage());
-//        }
-//    }
-//}
-
 package app.profile.controller;
-
+import app.profile.jwt.JwtUtils;
+import app.profile.model.Profile;
+import app.profile.repository.ProfileRepository;
+import app.profile.payload.response.MessageResponse;
 import app.profile.payload.request.UpdateProfileRequest;
 import app.profile.service.ProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,23 +21,28 @@ public class ProfileController {
     private static final Logger logger = LoggerFactory.getLogger(ProfileController.class);
 
     private final ProfileService profileService;
+    private final JwtUtils jwtUtils;
+    private final ProfileRepository profileRepository;
 
-    public ProfileController(ProfileService profileService) {
+    @Autowired
+    public ProfileController(ProfileService profileService, JwtUtils jwtUtils, ProfileRepository profileRepository) {
         this.profileService = profileService;
+        this.jwtUtils = jwtUtils;
+        this.profileRepository = profileRepository;
     }
+
 
     @PutMapping("/update")
     public ResponseEntity<String> updateProfile(@RequestHeader("Authorization") String token, @Valid @RequestBody UpdateProfileRequest updateRequest) {
         logger.info("Received request to update profile");
         try {
-            // Extract token by removing the "Bearer " prefix
             if (token.startsWith("Bearer ")) {
                 token = token.substring(7);
             } else {
                 return ResponseEntity.badRequest().body("Invalid token format");
             }
 
-            UUID userId = profileService.getUserIdFromJwtToken(token);
+            UUID userId = jwtUtils.getUserIdFromJwtToken(token);
 
             logger.debug("Updating profile for user ID: {}", userId);
             profileService.updateProfile(userId, updateRequest);
@@ -82,6 +55,37 @@ public class ProfileController {
         } catch (Exception e) {
             logger.error("Failed to update profile: An unexpected error occurred", e);
             return ResponseEntity.status(500).body("Failed to update profile: An unexpected error occurred");
+        }
+    }
+
+
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getProfile(@RequestHeader("Authorization") String token) {
+        try {
+            logger.info("Received request to get profile with token: {}", token);
+
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            } else {
+                logger.warn("Invalid token format");
+                return ResponseEntity.badRequest().body(new MessageResponse("Invalid token format"));
+            }
+
+            if (!jwtUtils.validateJwtToken(token)) {
+                logger.warn("Invalid or expired token");
+                return ResponseEntity.status(403).body(new MessageResponse("Error: Invalid or expired token."));
+            }
+
+            UUID userId = jwtUtils.getUserIdFromJwtToken(token);
+            logger.info("Extracted user ID from token: {}", userId);
+
+            return profileService.getProfileById(userId)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            logger.error("Error retrieving profile", e);
+            return ResponseEntity.badRequest().body(new MessageResponse("Error retrieving profile: " + e.getMessage()));
         }
     }
 }

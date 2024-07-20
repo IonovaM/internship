@@ -70,4 +70,6 @@ public class CustomUserDetails implements UserDetails {
     public String getEmail(){
         return user.getEmail();
     }
+
+    public boolean isConfirmed() { return user.isConfirmed(); }
 }

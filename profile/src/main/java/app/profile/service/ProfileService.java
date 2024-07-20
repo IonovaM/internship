@@ -19,9 +19,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.data.redis.core.RedisTemplate;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ProfileService {
@@ -32,11 +35,18 @@ public class ProfileService {
     @Value("${jwt.expireMs}")
     private int jwtExpirationMs;
 
-    @Autowired
+    private static final Logger logger = LoggerFactory.getLogger(ProfileService.class);
+    private static final Pattern ACCOUNT_DELETION_MESSAGE_PATTERN = Pattern.compile("User account deleted: (.+?) \\(Email: (.+?)\\)");
+
     private ProfileRepository profileRepository;
 
-    @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    public ProfileService(ProfileRepository profileRepository, ObjectMapper objectMapper) {
+        this.profileRepository = profileRepository;
+        this.objectMapper = objectMapper;
+    }
 
     public UUID getUserIdFromJwtToken(String token) {
         String userIdString = Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().getSubject();
@@ -61,6 +71,37 @@ public class ProfileService {
         }
     }
 
+    @KafkaListener(topics = "account-deletion-topic", groupId = "profile-group")
+    public void listenAccountDeletion(String message) {
+        logger.info("Received account deletion message: {}", message);
+
+        Matcher matcher = ACCOUNT_DELETION_MESSAGE_PATTERN.matcher(message);
+        if (matcher.matches()) {
+            String userIdString = matcher.group(1);
+            UUID userId;
+            try {
+                userId = UUID.fromString(userIdString);
+            } catch (IllegalArgumentException e) {
+                logger.error("Invalid UUID format: {}", userIdString, e);
+                return;
+            }
+
+            Optional<Profile> profileOpt = profileRepository.findById(userId);
+            if (profileOpt.isPresent()) {
+                try {
+                    profileRepository.deleteById(userId);
+                    logger.info("Profile deleted successfully for user ID: {}", userId);
+                } catch (Exception e) {
+                    logger.error("Failed to delete profile for user ID: {}", userId, e);
+                }
+            } else {
+                logger.warn("Profile not found for user ID: {}", userId);
+            }
+        } else {
+            logger.error("Account deletion message format is incorrect: {}", message);
+        }
+    }
+
     public void updateProfile(UUID userId, UpdateProfileRequest updateRequest) {
 
         Profile profile = profileRepository.findById(userId)
@@ -70,6 +111,11 @@ public class ProfileService {
         profile.setBirthday(updateRequest.getBirthday());
         profile.setFirstname(updateRequest.getFirstname());
         profile.setLastname(updateRequest.getLastname());
+        profile.setLastname(updateRequest.getBio());
         profileRepository.save(profile);
+    }
+
+    public Optional<Profile> getProfileById(UUID id) {
+        return profileRepository.findById(id);
     }
 }

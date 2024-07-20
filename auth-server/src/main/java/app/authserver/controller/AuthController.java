@@ -119,7 +119,7 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder encoder;
     private final JwtUtils jwtUtils;
-    private final KafkaProducer kafkaProducer; // Add KafkaProducer as a final field
+    private final KafkaProducer kafkaProducer;
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@RequestBody SignUpRequest signUpRequest) {
@@ -212,7 +212,13 @@ public class AuthController {
         Authentication authentication = authenticationManager.authenticate(usernamePasswordAuthenticationToken);
         SecurityContextHolder.getContext().setAuthentication(authentication);
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+
+        if (!userDetails.isConfirmed()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MessageResponse("Error: Account not confirmed. Please check your email to confirm your account."));
+        }
+
         String jwt = jwtUtils.generateJwtToken(userDetails.getId());
+        jwtUtils.saveToken(userDetails.getId(), jwt);
 
         List<String> roles = userDetails.getAuthorities().stream().map(item -> item.getAuthority())
                 .collect(Collectors.toList());
@@ -230,6 +236,70 @@ public class AuthController {
         return ResponseEntity.ok(jwtResponse);
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        String email = request.getEmail();
+        User user = userService.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+
+        String resetToken = jwtUtils.generateJwtToken(user.getId());
+        jwtUtils.saveToken(user.getId(), resetToken);
+        String resetUrl = "http://localhost:4001/authenticate/reset-password?token=" + resetToken;
+
+        String message = String.format("Password reset requested: %s (Email: %s). Reset link: %s", user.getUsername(), email, resetUrl);
+        kafkaProducer.sendMessage("password-reset-topic", message);
+
+        return ResponseEntity.ok(new MessageResponse("Password reset link has been sent to your email."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestParam("token") String token, @RequestBody ResetPasswordRequest request) {
+        if (jwtUtils.validateJwtToken(token)) {
+            UUID userId = jwtUtils.getUserIdFromJwtToken(token);
+            User user = userService.findById(userId)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found with id: " + userId));
+
+            String newPassword = request.getPassword();
+            String confirmPassword = request.getConfirmPassword();
+
+            if (!newPassword.equals(confirmPassword)) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Error: Passwords do not match."));
+            }
+
+            user.setPassword(encoder.encode(newPassword));
+            userService.saveUser(user);
+            jwtUtils.deleteToken(userId);
+
+            return ResponseEntity.ok(new MessageResponse("Password has been reset successfully."));
+        }
+
+        return ResponseEntity.badRequest().body(new MessageResponse("Error: Invalid or expired token."));
+    }
+
+    @DeleteMapping("/delete-account")
+    public ResponseEntity<?> deleteAccount(@RequestParam("token") String token) {
+        if (!jwtUtils.validateJwtToken(token)) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Error: Invalid or expired token."));
+        }
+
+        UUID userId = jwtUtils.getUserIdFromJwtToken(token);
+        Optional<User> optionalUser = userService.findById(userId);
+
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new MessageResponse("Error: User not found with ID: " + userId));
+        }
+
+        User user = optionalUser.get();
+        userService.removeRolesFromUser(userId);
+        userService.deleteUser(userId);
+        jwtUtils.deleteToken(userId);
+        String message = String.format("User account deleted: %s (Email: %s)", userId, user.getEmail());
+        kafkaProducer.sendMessage("account-deletion-topic", message);
+
+        return ResponseEntity.ok(new MessageResponse("Account deleted successfully."));
+    }
+
     @PostMapping("/refreshtoken")
     public ResponseEntity<?> refreshtoken(@RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
@@ -243,33 +313,3 @@ public class AuthController {
         return ResponseEntity.badRequest().body(null);
     }
 }
-
-
-
-
-
-
-//
-//    @PostMapping("/forgot/password")
-//    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest forgotPasswordRequest) {
-//        String email = forgotPasswordRequest.getEmail();
-///////////////////////
-//        Optional<User> optionalUser = userService.findByEmail(email);
-//
-//        if (optionalUser.isPresent()) {
-//            User user = optionalUser.get();
-//            try {
-//                String token = tokenUtil.generateToken();
-//                user.setSecurityToken(token);
-//                user.setTokenExpiryDate(Instant.now().plusSeconds(3600)); // 1 hour expiry
-//                userService.saveUser(user);
-//                emailUtil.sendResetPasswordEmail(user);
-//                return ResponseEntity.ok(new MessageResponse("A reset password link sent to your email. Please check."));
-//            } catch (Exception e) {
-//                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageResponse("Something went wrong."));
-//            }
-//        }
-//
-//        return ResponseEntity.badRequest().body(new MessageResponse("Email address is not registered with us."));
-//    }
-//

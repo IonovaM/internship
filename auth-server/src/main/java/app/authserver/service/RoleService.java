@@ -19,5 +19,4 @@ public class RoleService {
     public Optional<Role> findByName(EnumRole name) {
         return roleRepository.findByName(name);
     }
-
 }

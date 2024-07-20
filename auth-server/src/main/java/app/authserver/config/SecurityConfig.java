@@ -69,7 +69,7 @@ public class SecurityConfig {
 
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
-        return (web) -> web.ignoring().antMatchers("/authenticate/signup","/authenticate/login", "/authenticate/refreshtoken");
+        return (web) -> web.ignoring().antMatchers("/authenticate/**");
     }
 
     @Bean

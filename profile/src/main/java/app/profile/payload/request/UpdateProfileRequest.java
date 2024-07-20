@@ -13,16 +13,14 @@ import java.util.Date;
 @NoArgsConstructor
 public class UpdateProfileRequest {
 
-    @NotBlank
-    private String bio;
-
-    @NotBlank
-    private Date birthday;
-
-    @NotBlank
+    @NotBlank(message = "Firstname cannot be blank")
     private String firstname;
 
-    @NotBlank
+    @NotBlank(message = "Lastname cannot be blank")
     private String lastname;
 
+    @NotNull(message = "Birthday cannot be null")
+    private Date birthday;
+
+    private String bio;
 }

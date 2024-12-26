@@ -1,0 +1,12 @@
+# Этап сборки
+FROM openjdk:19 AS build
+WORKDIR /app
+COPY ../auth-server .
+RUN ./gradlew clean build
+
+# Этап выполнения
+FROM openjdk:19-jdk-slim
+LABEL authors="lelmon"
+WORKDIR /app
+COPY --from=build /app/build/libs/auth-server-0.0.1-SNAPSHOT.jar app.jar
+CMD ["java", "-jar", "app.jar"]

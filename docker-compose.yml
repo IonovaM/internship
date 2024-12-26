@@ -2,7 +2,7 @@ services:
 
   postgres:
     container_name: postgres
-    image: 'postgres:latest'
+    image: 'postgres:16'
     ports:
       - "${POSTGRES_PORT}:5432"
     restart: always
@@ -21,6 +21,11 @@ services:
       - redis_data:/data
 
   authserver:
+    build:
+      dockerfile: ../Dockerfile
+      context: ./auth-server
+      args:
+        PROJECT_NAME: auth-server
     image: 'auth-server'
     container_name: authserver
     ports:
@@ -36,12 +41,22 @@ services:
       - redis
 
   notification:
+    build:
+      dockerfile: ../Dockerfile
+      context: ./notification
+      args:
+        PROJECT_NAME: notification
     image: 'notification'
     container_name: notification
     ports:
       - '${NOTIFICATION_PORT}:${NOTIFICATION_PORT}'
 
   profile:
+    build:
+      dockerfile: ../Dockerfile
+      context: ./profile
+      args:
+        PROJECT_NAME: profile
     image: 'profile'
     container_name: profile
     ports:

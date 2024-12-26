@@ -1,26 +1,11 @@
 #!/bin/sh
 set -e
 
-build_project() {
-    echo "Building $1"
-    cd "$1" || return
-    ./gradlew clean build
-    cd ..
-}
+command -v docker compose >/dev/null 2>&1 || { echo "Docker Compose не установлен. Установите его и повторите попытку." >&2; exit 1; }
 
-projects=(
-    "auth-server"
-    "notification"
-    "profile"
-)
+echo "Начинаем сборку всех Docker-образов через Docker Compose..."
 
-# Loop through projects and build each one
-for project in "${projects[@]}"
-do
-    build_project "$project"
-done
+docker compose build || { echo "Ошибка при сборке контейнеров"; exit 1; }
+docker compose up -d || { echo "Ошибка при запуске контейнеров"; exit 1; }
 
-
-docker build -t auth-server ./auth-server
-docker build -t notification ./notification
-docker build -t profile ./profile
+echo "Сервисы успешно запущены!"
